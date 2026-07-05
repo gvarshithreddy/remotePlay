@@ -154,12 +154,17 @@ const urlParams = new URLSearchParams(window.location.search);
 roomId = urlParams.get('room');
 const urlPass = urlParams.get('pass');
 if (urlPass) {
-  document.addEventListener('DOMContentLoaded', () => {
+  const fillPassword = () => {
     const passwordInput = document.getElementById('passwordInput');
     if (passwordInput) {
       passwordInput.value = urlPass;
     }
-  });
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', fillPassword);
+  } else {
+    fillPassword();
+  }
 }
 
 // Standard STUN servers for WebRTC
