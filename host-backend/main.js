@@ -19,6 +19,11 @@ const io = new Server(server, {
 // Serve client-side static pages from the public folder
 serverApp.use(express.static(path.join(__dirname, 'public')));
 
+// Client Flow Route: serve index.html for /join requests
+serverApp.get('/join', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 // Room management structure
 const rooms = new Map();
 
