@@ -5,6 +5,7 @@ A low-latency, competitive-grade remote play streaming system that lets you stre
 ## 🚀 Live GitHub Repository & Releases
 - **Source Code**: [gvarshithreddy/remotePlay](https://github.com/gvarshithreddy/remotePlay)
 - **Pre-Compiled Build Release**: [v1.0.0 Releases](https://github.com/gvarshithreddy/remotePlay/releases/tag/v1.0.0)
+- **Direct Download (Windows Setup Installer)**: [RemotePlayHost-Setup.exe](https://github.com/gvarshithreddy/remotePlay/releases/download/v1.0.0/RemotePlayHost-Setup.exe)
 - **Direct Download (Windows x64 Portable ZIP)**: [RemotePlayHost-Portable.zip](https://github.com/gvarshithreddy/remotePlay/releases/download/v1.0.0/RemotePlayHost-Portable.zip)
 
 ---
