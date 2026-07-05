@@ -206,10 +206,10 @@ function launchSession() {
       sessionPassword.textContent = password;
       
       window.electronAPI.getLocalIp().then(localIp => {
-        const joinUrl = `http://${localIp}:3000/join?room=${roomId}`;
+        const joinUrl = `http://${localIp}:3000/join?room=${roomId}&pass=${password}`;
         sessionLinkText.textContent = joinUrl;
       }).catch(() => {
-        const joinUrl = `http://localhost:3000/join?room=${roomId}`;
+        const joinUrl = `http://localhost:3000/join?room=${roomId}&pass=${password}`;
         sessionLinkText.textContent = joinUrl;
       });
       

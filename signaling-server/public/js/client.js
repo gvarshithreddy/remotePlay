@@ -152,6 +152,15 @@ const componentColors = {
 // URL Query Param Parsing
 const urlParams = new URLSearchParams(window.location.search);
 roomId = urlParams.get('room');
+const urlPass = urlParams.get('pass');
+if (urlPass) {
+  document.addEventListener('DOMContentLoaded', () => {
+    const passwordInput = document.getElementById('passwordInput');
+    if (passwordInput) {
+      passwordInput.value = urlPass;
+    }
+  });
+}
 
 // Standard STUN servers for WebRTC
 const rtcConfig = {
