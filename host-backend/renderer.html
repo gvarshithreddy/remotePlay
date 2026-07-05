@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Windows Remote Play Host Dashboard</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            orbitron: ['Orbitron', 'sans-serif'],
+            inter: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'Fira Code', 'monospace']
+          },
+          colors: {
+            game: {
+              bg: '#06060c',
+              panel: '#0c0c16',
+              accent: '#06b6d4', // Cyan neon
+              success: '#10b981', // Emerald neon
+              purple: '#8b5cf6', // Violet neon
+              dark: '#111827'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <style>
+    /* Styling utilities */
+    body {
+      font-family: 'Inter', sans-serif;
+      overflow-x: hidden;
+    }
+    
+    .neon-border-cyan {
+      border: 1px solid rgba(6, 182, 212, 0.2);
+      box-shadow: 0 0 15px rgba(6, 182, 212, 0.05);
+    }
+    .neon-border-cyan:hover {
+      border: 1px solid rgba(6, 182, 212, 0.5);
+      box-shadow: 0 0 20px rgba(6, 182, 212, 0.15);
+    }
+    
+    .neon-border-purple {
+      border: 1px solid rgba(139, 92, 246, 0.2);
+      box-shadow: 0 0 15px rgba(139, 92, 246, 0.05);
+    }
+    
+    .neon-text-cyan {
+      text-shadow: 0 0 8px rgba(6, 182, 212, 0.6);
+    }
+    .neon-text-purple {
+      text-shadow: 0 0 8px rgba(139, 92, 246, 0.6);
+    }
+    .neon-text-success {
+      text-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+    }
+
+    /* Scrollbars */
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0a0a0f;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1f1f2e;
+      border-radius: 9px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #06b6d4;
+    }
+    
+    /* Holographic glow mappings */
+    .glowing-element {
+      transition: fill 0.15s ease, filter 0.15s ease, stroke 0.15s ease;
+      fill: #1f1f2e;
+      stroke: #374151;
+    }
+    .glowing-element.active-button {
+      fill: #06b6d4 !important;
+      stroke: #22d3ee !important;
+      filter: drop-shadow(0 0 6px #06b6d4);
+    }
+    .glowing-element.active-trigger {
+      fill: #8b5cf6 !important;
+      stroke: #a78bfa !important;
+      filter: drop-shadow(0 0 6px #8b5cf6);
+    }
+    .glowing-element.active-dpad {
+      fill: #10b981 !important;
+      stroke: #34d399 !important;
+      filter: drop-shadow(0 0 6px #10b981);
+    }
+    
+    /* Custom animation */
+    .animate-pulse-glow {
+      animation: pulseGlow 2s infinite alternate;
+    }
+    @keyframes pulseGlow {
+      0% {
+        box-shadow: 0 0 5px rgba(6, 182, 212, 0.2);
+        border-color: rgba(6, 182, 212, 0.2);
+      }
+      100% {
+        box-shadow: 0 0 15px rgba(6, 182, 212, 0.6);
+        border-color: rgba(6, 182, 212, 0.6);
+      }
+    }
+  </style>
+</head>
+<body class="bg-game-bg text-gray-200 select-none min-h-screen flex flex-col">
+
+  <!-- TOP STATUS/LIFECYCLE CONTROL HEADER BAR -->
+  <header class="w-full bg-[#0a0a12] border-b border-white/5 px-6 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 z-10">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-game-accent to-game-purple flex items-center justify-center shadow-lg">
+        <i class="fa-solid fa-gamepad text-white text-sm"></i>
+      </div>
+      <div>
+        <h1 class="font-orbitron font-extrabold text-sm tracking-wider uppercase bg-clip-text text-transparent bg-gradient-to-r from-game-accent to-game-purple">RemotePlay Host</h1>
+        <p class="text-[9px] text-gray-400 uppercase tracking-widest flex items-center gap-1.5 mt-0.5">
+          System Status: 
+          <span id="headerStatusText" class="text-yellow-500 font-bold flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse"></span> Offline
+          </span>
+        </p>
+      </div>
+    </div>
+
+    <!-- Active Session Credentials (Hidden until session starts) -->
+    <div id="sessionCredsBar" class="hidden flex flex-wrap items-center gap-3 bg-neutral-900/60 border border-white/5 px-4 py-2 rounded-xl text-[10px]">
+      <div class="flex items-center gap-2">
+        <span class="text-gray-400 font-medium">Room ID:</span>
+        <span id="sessionRoomId" class="text-white font-mono font-bold select-all bg-black/40 px-2 py-0.5 rounded border border-white/5">--</span>
+      </div>
+      <div class="w-[1px] h-3 bg-white/10"></div>
+      <div class="flex items-center gap-2">
+        <span class="text-gray-400 font-medium">Password:</span>
+        <span id="sessionPassword" class="text-white font-mono font-bold select-all bg-black/40 px-2 py-0.5 rounded border border-white/5">--</span>
+      </div>
+      <div class="w-[1px] h-3 bg-white/10"></div>
+      <div class="flex items-center gap-2">
+        <span class="text-gray-400 font-medium">Link:</span>
+        <span id="sessionLinkText" class="text-game-accent font-mono font-bold select-all bg-black/40 px-2 py-0.5 rounded border border-cyan-500/10">--</span>
+      </div>
+    </div>
+
+    <!-- Main Session Controls -->
+    <div class="flex items-center gap-2.5">
+      <button id="btnToggleSession" class="px-5 py-2.5 bg-gradient-to-r from-game-accent to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 text-white font-orbitron font-bold text-[10px] uppercase tracking-wider rounded-xl transition-all duration-300 shadow-lg shadow-cyan-950/20 active:scale-95 flex items-center gap-2">
+        <i class="fa-solid fa-play"></i> Launch Streaming Hub
+      </button>
+    </div>
+  </header>
+
+  <!-- DASHBOARD WORKSPACE GRID -->
+  <main class="flex-1 w-full p-6 grid grid-cols-12 gap-6 overflow-hidden">
+    
+    <!-- LEFT COLUMN: STEAM LIBRARY LAUNCHER & LOG TERMINAL (8 cols) -->
+    <section class="col-span-12 lg:col-span-8 flex flex-col gap-6 overflow-hidden">
+      
+      <!-- 1. STEAM LIBRARY PANEL -->
+      <div class="flex-1 bg-game-panel border border-white/5 rounded-2xl p-5 shadow-2xl flex flex-col overflow-hidden">
+        <div class="flex items-center justify-between border-b border-white/5 pb-3 mb-4">
+          <div class="flex items-center gap-2.5">
+            <i class="fa-brands fa-steam text-game-accent text-lg"></i>
+            <h2 class="font-orbitron font-extrabold text-xs uppercase tracking-wider">Steam Library Catalog</h2>
+          </div>
+          <span id="steamCount" class="text-[9px] bg-white/5 border border-white/10 px-2 py-0.5 rounded-full text-gray-400 font-mono">0 Games Detected</span>
+        </div>
+
+        <!-- Games Grid scroll container -->
+        <div id="gamesGrid" class="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 pr-1 text-left">
+          <!-- Dynamically populated -->
+          <div class="col-span-full flex flex-col items-center justify-center p-12 text-center text-gray-500">
+            <i class="fa-solid fa-magnifying-glass text-2xl mb-3 animate-pulse"></i>
+            <p class="text-xs">Scanning registry for installed Steam games manifests...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. CONSOLE SESSION LOG TERMINAL -->
+      <div class="h-44 bg-[#050508] border border-white/5 rounded-2xl p-4 shadow-xl flex flex-col overflow-hidden font-mono">
+        <div class="flex items-center justify-between border-b border-white/5 pb-2 mb-2 text-[9px] text-gray-400">
+          <span class="flex items-center gap-1.5 uppercase font-bold tracking-wider">
+            <span class="w-1.5 h-1.5 rounded-full bg-game-accent"></span> System Log Pipe
+          </span>
+          <button id="btnClearLogs" class="hover:text-white transition-colors uppercase"><i class="fa-solid fa-trash-can mr-1"></i> Clear</button>
+        </div>
+        <div id="logOutput" class="flex-1 overflow-y-auto text-[9px] leading-relaxed text-gray-400 space-y-1 pr-1 font-mono select-text selection:bg-cyan-500/20">
+          <div class="text-cyan-500">[System] Remote Play host shell initiated. Waiting for launch instructions...</div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- RIGHT COLUMN: HOLOGRAPHIC CONTROLLER & ROOM SESSIONS (4 cols) -->
+    <section class="col-span-12 lg:col-span-4 flex flex-col gap-6 overflow-hidden">
+      
+      <!-- 1. HOLOGRAPHIC GAMEPAD CONTROLLER VISUALIZER -->
+      <div class="bg-game-panel border border-white/5 rounded-2xl p-5 shadow-2xl flex flex-col items-center justify-center relative">
+        <div class="w-full flex items-center justify-between border-b border-white/5 pb-3 mb-4">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-microchip text-game-purple text-base"></i>
+            <h2 class="font-orbitron font-extrabold text-xs uppercase tracking-wider">Holographic Input Mapping</h2>
+          </div>
+          <span class="text-[9px] bg-game-purple/10 border border-game-purple/20 px-2.5 py-0.5 rounded-full text-game-purple font-orbitron font-bold uppercase tracking-wider">Xbox 360</span>
+        </div>
+
+        <!-- High Tech SVG Xbox Controller Outline -->
+        <svg id="svgGamepad" viewBox="0 0 600 450" class="w-full max-w-[320px] aspect-[4/3] drop-shadow-[0_0_15px_rgba(139,92,246,0.05)]">
+          <!-- Controller Shell Body Outline -->
+          <path class="glowing-element stroke-gray-700 stroke-2" fill="#0c0c16" d="M 200 80 Q 300 70 400 80 Q 480 80 500 130 Q 530 200 520 280 Q 510 340 430 380 Q 380 400 300 360 Q 220 400 170 380 Q 90 340 80 280 Q 70 200 100 130 Q 120 80 200 80 Z" />
+          
+          <!-- Grips detail -->
+          <path d="M 120 180 Q 180 220 160 300" stroke="#1f2937" stroke-width="3" fill="none" />
+          <path d="M 480 180 Q 420 220 440 300" stroke="#1f2937" stroke-width="3" fill="none" />
+
+          <!-- Left Trigger (LT) & Right Trigger (RT) -->
+          <path id="part_LT" class="glowing-element" d="M 140 30 L 190 30 L 180 75 L 150 75 Z" />
+          <path id="part_RT" class="glowing-element" d="M 460 30 L 410 30 L 420 75 L 450 75 Z" />
+
+          <!-- Left Shoulder (LB) & Right Shoulder (RB) -->
+          <path id="part_LB" class="glowing-element" d="M 145 76 Q 200 65 240 76 Q 240 85 235 95 Q 200 85 155 95 Z" />
+          <path id="part_RB" class="glowing-element" d="M 455 76 Q 400 65 360 76 Q 360 85 365 95 Q 400 85 445 95 Z" />
+
+          <!-- Left Thumbstick (LS) Outline & Center -->
+          <g id="grp_left_stick" transform="translate(0, 0)">
+            <circle class="stroke-gray-700" cx="190" cy="180" r="40" fill="#111827" stroke-width="2" />
+            <circle id="part_left_stick" class="glowing-element" cx="190" cy="180" r="22" fill="#1f1f2e" stroke-width="2" />
+          </g>
+
+          <!-- Right Thumbstick (RS) Outline & Center -->
+          <g id="grp_right_stick" transform="translate(0, 0)">
+            <circle class="stroke-gray-700" cx="360" cy="270" r="40" fill="#111827" stroke-width="2" />
+            <circle id="part_right_stick" class="glowing-element" cx="360" cy="270" r="22" fill="#1f1f2e" stroke-width="2" />
+          </g>
+
+          <!-- D-PAD Silhouette (Up, Down, Left, Right) -->
+          <g id="part_dpad">
+            <!-- Center box -->
+            <rect x="235" y="255" width="30" height="30" fill="#111827" />
+            <!-- Up -->
+            <path id="part_Dpad_Up" class="glowing-element" d="M 235 255 L 265 255 L 250 225 Z" />
+            <!-- Down -->
+            <path id="part_Dpad_Down" class="glowing-element" d="M 235 285 L 265 285 L 250 315 Z" />
+            <!-- Left -->
+            <path id="part_Dpad_Left" class="glowing-element" d="M 235 255 L 235 285 L 205 270 Z" />
+            <!-- Right -->
+            <path id="part_Dpad_Right" class="glowing-element" d="M 265 255 L 265 285 L 295 270 Z" />
+          </g>
+
+          <!-- Face Buttons: A, B, X, Y -->
+          <!-- Button X -->
+          <circle id="part_Button_X" class="glowing-element" cx="375" cy="180" r="16" />
+          <text x="375" y="185" fill="#4b5563" font-family="'Orbitron', sans-serif" font-weight="bold" font-size="14" text-anchor="middle">X</text>
+          
+          <!-- Button Y -->
+          <circle id="part_Button_Y" class="glowing-element" cx="410" cy="145" r="16" />
+          <text x="410" y="150" fill="#4b5563" font-family="'Orbitron', sans-serif" font-weight="bold" font-size="14" text-anchor="middle">Y</text>
+
+          <!-- Button A -->
+          <circle id="part_Button_A" class="glowing-element" cx="410" cy="215" r="16" />
+          <text x="410" y="220" fill="#4b5563" font-family="'Orbitron', sans-serif" font-weight="bold" font-size="14" text-anchor="middle">A</text>
+
+          <!-- Button B -->
+          <circle id="part_Button_B" class="glowing-element" cx="445" cy="180" r="16" />
+          <text x="445" y="185" fill="#4b5563" font-family="'Orbitron', sans-serif" font-weight="bold" font-size="14" text-anchor="middle">B</text>
+
+          <!-- Back & Start Menu Buttons -->
+          <!-- Back button -->
+          <rect id="part_Back" class="glowing-element" x="250" y="155" width="22" height="12" rx="4" />
+          <!-- Start button -->
+          <rect id="part_Start" class="glowing-element" x="328" y="155" width="22" height="12" rx="4" />
+
+          <!-- Xbox Central Logo Sphere -->
+          <circle cx="300" cy="120" r="22" fill="#08080f" stroke="#1f2937" stroke-width="2" />
+          <path d="M 288 112 Q 300 128 312 112 Q 300 135 288 112" fill="none" stroke="#4b5563" stroke-width="3" />
+        </svg>
+
+        <!-- Live Visual feedback legend status -->
+        <div class="mt-2 w-full flex items-center justify-between text-[8px] font-mono text-gray-500">
+          <span>LT/RT: Trigger Depth</span>
+          <span>Left/Right Stick: Joystick Deflections</span>
+        </div>
+      </div>
+
+      <!-- 2. CONNECTED SESSIONS PANEL -->
+      <div class="flex-1 bg-game-panel border border-white/5 rounded-2xl p-5 shadow-2xl flex flex-col overflow-hidden">
+        
+        <!-- Connected client sub-panel -->
+        <div class="flex items-center gap-2 border-b border-white/5 pb-3 mb-4">
+          <i class="fa-solid fa-users text-game-accent text-sm"></i>
+          <h2 class="font-orbitron font-extrabold text-xs uppercase tracking-wider">Connected Players</h2>
+        </div>
+        <div id="usersList" class="space-y-3 overflow-y-auto flex-1 pr-1">
+          <!-- Dynamically populated players -->
+          <div class="text-center py-6 text-gray-600 text-[10px]">
+            <i class="fa-solid fa-circle-notch animate-spin text-base mb-2 text-neutral-800"></i>
+            <p>Waiting for room host connection...</p>
+          </div>
+        </div>
+
+        <!-- Gamepads state list panel -->
+        <div class="mt-4 border-t border-white/5 pt-4">
+          <div class="flex items-center gap-2 pb-3">
+            <i class="fa-solid fa-gamepad text-game-purple text-sm"></i>
+            <h3 class="font-orbitron font-extrabold text-xs uppercase tracking-wider">Active Device Tree</h3>
+          </div>
+          <div id="devicesList" class="space-y-2 text-[10px]">
+            <!-- Dynamically populated controller devices -->
+            <div class="flex items-center justify-between p-2 bg-[#050508] border border-white/5 rounded-lg text-gray-500">
+              <span class="flex items-center gap-1.5"><i class="fa-solid fa-gamepad"></i> Local Gamepad</span>
+              <span class="text-[8px] bg-red-950/20 text-red-400 border border-red-900/30 px-2 py-0.5 rounded font-orbitron font-bold uppercase">Disconnected</span>
+            </div>
+            <div id="virtualControllerRow" class="flex items-center justify-between p-2 bg-[#050508] border border-white/5 rounded-lg text-gray-500">
+              <span class="flex items-center gap-1.5"><i class="fa-solid fa-microchip"></i> Remote Virtual Xbox 360</span>
+              <span id="virtualControllerBadge" class="text-[8px] bg-neutral-900 text-neutral-500 px-2 py-0.5 rounded font-orbitron font-bold uppercase">Unplugged</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+  </main>
+
+  <!-- WIZARD DRIVERS INSTALLATION OVERLAY MODAL (Hidden if ViGEmBus is detected) -->
+  <div id="preflightModal" class="fixed inset-0 z-50 bg-[#06060c]/95 backdrop-blur-md flex items-center justify-center p-6 hidden">
+    <div class="w-full max-w-md bg-game-panel border border-cyan-500/30 shadow-2xl shadow-cyan-950/20 rounded-2xl p-6 flex flex-col text-center animate-pulse-glow">
+      <div class="w-16 h-16 bg-cyan-950/40 border border-cyan-500/20 rounded-full flex items-center justify-center text-game-accent text-2xl mx-auto mb-4">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+      </div>
+      <h2 class="font-orbitron font-extrabold text-base uppercase tracking-wider text-white">System Component Missing</h2>
+      <p class="text-xs text-gray-400 mt-2 leading-relaxed">
+        The Windows virtual controller framework <span class="text-game-accent font-semibold font-orbitron">ViGEmBus</span> is not installed. This device driver is required to emulate actual gamepad hardware on this PC.
+      </p>
+
+      <!-- Dynamic loading state / Action Buttons -->
+      <div id="modalActionContainer" class="mt-6 space-y-3">
+        <button id="btnInstallDrivers" class="w-full py-3 bg-gradient-to-r from-game-accent to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 text-white font-orbitron font-bold text-xs uppercase tracking-wider rounded-xl transition-all duration-300 shadow-lg active:scale-95 flex items-center justify-center gap-2">
+          <i class="fa-solid fa-download"></i> Automatic Installation (1-Click)
+        </button>
+        <button id="btnSkipDrivers" class="w-full py-2.5 bg-neutral-900 border border-white/5 hover:bg-neutral-800 text-gray-400 hover:text-white font-orbitron font-bold text-[10px] uppercase tracking-wider rounded-xl transition-all duration-300 flex items-center justify-center gap-1.5">
+          Skip Setup (Logs Only Mode)
+        </button>
+      </div>
+
+      <!-- Installation Progress Display -->
+      <div id="modalProgressContainer" class="mt-6 hidden text-left space-y-2">
+        <div class="flex items-center justify-between text-[10px] font-mono">
+          <span id="installStatusText" class="text-game-accent font-bold">Downloading Driver Package...</span>
+          <span id="installPercentText" class="text-gray-400">0%</span>
+        </div>
+        <div class="w-full bg-[#050508] border border-white/5 h-2.5 rounded-full overflow-hidden">
+          <div id="installProgressBar" class="h-full bg-gradient-to-r from-game-accent to-game-purple w-0 transition-all duration-300"></div>
+        </div>
+        <p class="text-[8px] text-gray-500 italic mt-1 leading-normal">
+          Note: Windows User Account Control (UAC) may prompt you for administrator permission during installation.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- JS CONTROLLER LOADING -->
+  <script src="renderer.js"></script>
+</body>
+</html>

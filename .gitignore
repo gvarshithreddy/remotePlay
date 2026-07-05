@@ -1,0 +1,9 @@
+node_modules/
+dist/
+out/
+.env
+*.log
+.gemini/
+.agents/
+.system_generated/
+package-lock.json
