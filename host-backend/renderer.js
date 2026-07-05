@@ -205,11 +205,11 @@ function launchSession() {
       sessionRoomId.textContent = roomId;
       sessionPassword.textContent = password;
       
-      window.electronAPI.getLocalIp().then(localIp => {
-        const joinUrl = `http://${localIp}:3000/join?room=${roomId}&pass=${password}`;
-        sessionLinkText.textContent = joinUrl;
-      }).catch(() => {
-        const joinUrl = `http://localhost:3000/join?room=${roomId}&pass=${password}`;
+      Promise.all([
+        window.electronAPI.getLocalIp().catch(() => 'localhost'),
+        window.electronAPI.getServerPort().catch(() => 58330)
+      ]).then(([localIp, port]) => {
+        const joinUrl = `http://${localIp}:${port}/join?room=${roomId}&pass=${password}`;
         sessionLinkText.textContent = joinUrl;
       });
       

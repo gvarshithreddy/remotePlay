@@ -261,12 +261,26 @@ function showScreenSection(sectionId) {
 
 // Home screen triggers
 btnHomeConnect.addEventListener('click', () => {
-  // Reset fields and show the connection verification modal
-  passwordInput.value = '';
   authError.classList.add('hidden');
-  authSection.classList.remove('hidden');
   showScreenSection('workspace');
   setMode(false); // Connect launches straight to stream (Play Mode)
+  
+  if (urlPass) {
+    passwordInput.value = urlPass;
+    authSection.classList.add('hidden');
+    loadingSection.classList.remove('hidden');
+    
+    sha256(urlPass).then(passwordHash => {
+      initializeSocketAndConnect(passwordHash);
+    }).catch(err => {
+      console.error(err);
+      authSection.classList.remove('hidden');
+      loadingSection.classList.add('hidden');
+    });
+  } else {
+    passwordInput.value = '';
+    authSection.classList.remove('hidden');
+  }
 });
 
 btnHomeEdit.addEventListener('click', () => {

@@ -108,7 +108,7 @@ function getSocketRoom(socket) {
 }
 
 // Start HTTP/Socket Server locally with error handling to prevent EADDRINUSE crashes
-const SERVER_PORT = 3000;
+const SERVER_PORT = 58330;
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
@@ -193,6 +193,11 @@ app.on('window-all-closed', () => {
 // IPC Handler: Fetch LAN IP
 ipcMain.handle('get-local-ip', () => {
   return getLocalIpAddress();
+});
+
+// IPC Handler: Fetch Server Port
+ipcMain.handle('get-server-port', () => {
+  return SERVER_PORT;
 });
 
 // IPC Handler: Check ViGEmBus Installation
