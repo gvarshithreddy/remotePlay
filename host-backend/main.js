@@ -102,8 +102,17 @@ function getSocketRoom(socket) {
   return roomsJoined.find(r => r !== socket.id);
 }
 
-// Start HTTP/Socket Server locally
+// Start HTTP/Socket Server locally with error handling to prevent EADDRINUSE crashes
 const SERVER_PORT = 3000;
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.warn(`[Embedded Server Warning] Port ${SERVER_PORT} is already occupied. Proceeding with existing server instance.`);
+  } else {
+    console.error('[Embedded Server Error]', err);
+  }
+});
+
 server.listen(SERVER_PORT, '0.0.0.0', () => {
   console.log(`[Embedded Server] Local network signaling server online on port ${SERVER_PORT}`);
 });
