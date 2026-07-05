@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Session orchestration
   startSession: (config) => ipcRenderer.invoke('start-session', config),
   killSession: () => ipcRenderer.invoke('kill-session'),
+  getLocalIp: () => ipcRenderer.invoke('get-local-ip'),
   
   // Event listeners
   onDriverStatus: (callback) => ipcRenderer.on('driver-status', (event, value) => callback(value)),

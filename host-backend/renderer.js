@@ -204,8 +204,15 @@ function launchSession() {
       // Display credentials
       sessionRoomId.textContent = roomId;
       sessionPassword.textContent = password;
-      const joinUrl = `http://localhost:3000/join?room=${roomId}`;
-      sessionLinkText.textContent = joinUrl;
+      
+      window.electronAPI.getLocalIp().then(localIp => {
+        const joinUrl = `http://${localIp}:3000/join?room=${roomId}`;
+        sessionLinkText.textContent = joinUrl;
+      }).catch(() => {
+        const joinUrl = `http://localhost:3000/join?room=${roomId}`;
+        sessionLinkText.textContent = joinUrl;
+      });
+      
       sessionCredsBar.classList.remove('hidden');
     } else {
       logSystem(`[Error] Fork initialization failed: ${response.error}`, 'error');

@@ -2,11 +2,129 @@ const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
+const os = require('os');
 const { exec, execSync, fork } = require('child_process');
 
+// 1. EMBEDDED EXPRESS & SOCKET.IO SIGNALING SERVER
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+
+const serverApp = express();
+const server = http.createServer(serverApp);
+const io = new Server(server, {
+  cors: { origin: '*' }
+});
+
+// Serve client-side static pages from the public folder
+serverApp.use(express.static(path.join(__dirname, 'public')));
+
+// Room management structure
+const rooms = new Map();
+
+io.on('connection', (socket) => {
+  console.log(`[Embedded Server] Client socket connected: ${socket.id}`);
+  
+  socket.on('register-host', ({ roomId, passwordHash }, callback) => {
+    rooms.set(roomId, {
+      hostSocketId: socket.id,
+      passwordHash: passwordHash,
+      clientSocketId: null
+    });
+    socket.join(roomId);
+    console.log(`[Embedded Server] Host registered room ID: ${roomId}`);
+    if (typeof callback === 'function') callback({ success: true });
+  });
+  
+  socket.on('register-client', ({ roomId, passwordHash }, callback) => {
+    const room = rooms.get(roomId);
+    if (!room) {
+      if (typeof callback === 'function') callback({ success: false, error: 'Room does not exist.' });
+      return;
+    }
+    if (room.passwordHash !== passwordHash) {
+      if (typeof callback === 'function') callback({ success: false, error: 'Invalid room password.' });
+      return;
+    }
+    
+    room.clientSocketId = socket.id;
+    socket.join(roomId);
+    console.log(`[Embedded Server] Mobile client authenticated and joined room: ${roomId}`);
+    
+    // Notify room host
+    io.to(room.hostSocketId).emit('client-ready', { clientSocketId: socket.id });
+    if (typeof callback === 'function') callback({ success: true });
+  });
+  
+  socket.on('sdp-offer', ({ offer }) => {
+    const roomId = getSocketRoom(socket);
+    if (roomId) socket.to(roomId).emit('sdp-offer', { offer });
+  });
+  
+  socket.on('sdp-answer', ({ answer }) => {
+    const roomId = getSocketRoom(socket);
+    if (roomId) socket.to(roomId).emit('sdp-answer', { answer });
+  });
+  
+  socket.on('ice-candidate', ({ candidate }) => {
+    const roomId = getSocketRoom(socket);
+    if (roomId) socket.to(roomId).emit('ice-candidate', { candidate });
+  });
+  
+  socket.on('client-controller-input', (data) => {
+    const roomId = getSocketRoom(socket);
+    if (roomId) socket.to(roomId).emit('client-controller-input', data);
+  });
+  
+  socket.on('disconnect', () => {
+    console.log(`[Embedded Server] Socket disconnected: ${socket.id}`);
+    
+    // Cleanup room state on disconnects
+    for (const [roomId, room] of rooms.entries()) {
+      if (room.hostSocketId === socket.id) {
+        io.to(roomId).emit('host-disconnected', { message: 'Stream ended: Host left.', clearInputs: true });
+        rooms.delete(roomId);
+        console.log(`[Embedded Server] Host left. Room ${roomId} terminated.`);
+        break;
+      }
+      if (room.clientSocketId === socket.id) {
+        io.to(room.hostSocketId).emit('client-disconnected');
+        room.clientSocketId = null;
+        console.log(`[Embedded Server] Player client disconnected from Room ${roomId}.`);
+        break;
+      }
+    }
+  });
+});
+
+function getSocketRoom(socket) {
+  const roomsJoined = Array.from(socket.rooms);
+  return roomsJoined.find(r => r !== socket.id);
+}
+
+// Start HTTP/Socket Server locally
+const SERVER_PORT = 3000;
+server.listen(SERVER_PORT, '0.0.0.0', () => {
+  console.log(`[Embedded Server] Local network signaling server online on port ${SERVER_PORT}`);
+});
+
+// 2. ELECTRON LIFE-CYCLE CONTROLLER
 let mainWindow = null;
 let hostProcess = null;
 let isDownloadingDriver = false;
+
+function getLocalIpAddress() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      // Prioritize standard IPv4 non-internal interface cards
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return '127.0.0.1';
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -26,7 +144,6 @@ function createWindow() {
 
   mainWindow.loadFile('renderer.html');
 
-  // Open external links in default OS browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };
@@ -40,7 +157,7 @@ function createWindow() {
 
 function cleanupSubprocess() {
   if (hostProcess) {
-    console.log("[Electron Main] Terminating host subprocess...");
+    console.log("[Electron Main] Terminating host process...");
     hostProcess.kill();
     hostProcess = null;
   }
@@ -59,13 +176,16 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+// IPC Handler: Fetch LAN IP
+ipcMain.handle('get-local-ip', () => {
+  return getLocalIpAddress();
+});
+
 // IPC Handler: Check ViGEmBus Installation
 ipcMain.handle('check-drivers', () => {
-  // Check typical driver file location
   const driverExists = fs.existsSync('C:\\Windows\\System32\\drivers\\ViGEmBus.sys');
   if (driverExists) return true;
 
-  // Query registry
   try {
     execSync('reg query HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Services\\ViGEmBus', { stdio: 'ignore' });
     return true;
@@ -91,7 +211,6 @@ ipcMain.handle('install-drivers', async () => {
 
     mainWindow.webContents.send('driver-status', { state: 'installing' });
 
-    // Execute MSI setup quietly
     const installCommand = `msiexec /i "${tempMsiPath}" /passive /qn /norestart`;
     exec(installCommand, (err) => {
       isDownloadingDriver = false;
@@ -113,14 +232,12 @@ ipcMain.handle('install-drivers', async () => {
   }
 });
 
-// Helper: Download file with progress report callback
 function downloadFile(url, dest, onProgress) {
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(dest);
     
     https.get(url, (response) => {
       if (response.statusCode === 302 || response.statusCode === 301) {
-        // Handle redirect
         downloadFile(response.headers.location, dest, onProgress)
           .then(resolve)
           .catch(reject);
@@ -198,7 +315,6 @@ ipcMain.handle('scan-library', () => {
               const nameMatch = acfContent.match(/"name"\s+"([^"]+)"/);
 
               if (appidMatch && nameMatch) {
-                // Filter helper/runtime packages
                 const appid = appidMatch[1];
                 if (appid !== '250820' && appid !== '228980') {
                   games.push({
@@ -215,7 +331,6 @@ ipcMain.handle('scan-library', () => {
     } catch (err) {}
   });
 
-  // Deduplicate apps list
   const uniqueGames = [];
   const seen = new Set();
   games.forEach(g => {
@@ -244,6 +359,15 @@ ipcMain.handle('start-session', (event, config) => {
     hostProcess = null;
   }
 
+  // Resolve precompiled FFmpeg binary path from ffmpeg-static automatically
+  let ffmpegStaticPath = null;
+  try {
+    ffmpegStaticPath = require('ffmpeg-static');
+    console.log(`[Electron Main] Bundled FFmpeg static path resolved: ${ffmpegStaticPath}`);
+  } catch (err) {
+    console.warn("[Electron Main] Could not load bundled ffmpeg-static. Falling back to system environment path.");
+  }
+
   const hostJsPath = path.join(__dirname, 'host.js');
   console.log(`[Electron Main] Forking host process: ${hostJsPath}`);
 
@@ -251,11 +375,12 @@ ipcMain.handle('start-session', (event, config) => {
     hostProcess = fork(hostJsPath, [], {
       env: {
         ...process.env,
-        SIGNALING_URL: config.signalingUrl,
+        SIGNALING_URL: `http://localhost:${SERVER_PORT}`, // Connect locally to the embedded server
         ROOM_ID: config.roomId,
-        STREAM_PASSWORD: config.password
+        STREAM_PASSWORD: config.password,
+        FFMPEG_PATH: ffmpegStaticPath || 'ffmpeg' // Pass bundled FFmpeg binary path
       },
-      silent: true // capture stdout/stderr streams
+      silent: true
     });
 
     hostProcess.stdout.on('data', (data) => {

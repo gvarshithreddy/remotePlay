@@ -527,7 +527,7 @@ function startMediaCapture(videoSource, audioSource) {
   ];
 
   try {
-    ffmpegProcess = spawn('ffmpeg', ffmpegArgs);
+    ffmpegProcess = spawn(process.env.FFMPEG_PATH || 'ffmpeg', ffmpegArgs);
     
     let videoBuffer = Buffer.alloc(0);
     
